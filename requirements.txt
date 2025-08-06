@@ -4,8 +4,11 @@ pypdf2==3.0.1
 transformers==4.44.2
 sentence-transformers==3.0.1
 faiss-cpu==1.8.0
-pinecone
+pinecone-client==2.2.4
 langchain==0.0.308
 psycopg2-binary==2.9.9
 python-dotenv==1.0.1
 redis==5.0.8
+requests==2.31.0
+torch
+numpy

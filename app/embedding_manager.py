@@ -27,7 +27,9 @@ def search_similar_clauses(query: str, embeddings: np.ndarray) -> list:
     # Return the indices of similar embeddings
     return I[0].tolist()
 
-def search_pinecone(query: str, embeddings: np.ndarray) -> list:
+def search_pinecone(query_dict: dict, embeddings: np.ndarray) -> list:
     """Compatibility function that uses FAISS instead of Pinecone."""
     print("Using FAISS for similarity search")
-    return search_similar_clauses(query, embeddings)
+    # Extract query string from dict
+    query_string = query_dict.get("raw_query", "") if isinstance(query_dict, dict) else str(query_dict)
+    return search_similar_clauses(query_string, embeddings)
