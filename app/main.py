@@ -15,13 +15,13 @@ from contextlib import asynccontextmanager
 load_dotenv()
 
 # Import our enhanced modules
-from document_processor import DocumentProcessor
-from embedding_manager import EmbeddingManager
-from query_parser import QueryParser
-from clause_matcher import ClauseMatcher
-from decision_engine import DecisionEngine
-from database import DatabaseManager
-from llm_manager import LLMManager
+from app.document_processor import DocumentProcessor
+from app.embedding_manager import EmbeddingManager
+from app.query_parser import QueryParser
+from app.clause_matcher import ClauseMatcher
+from app.decision_engine import DecisionEngine
+from app.database import DatabaseManager
+from app.llm_manager import LLMManager
 import utils
 
 # Configure enhanced logging
