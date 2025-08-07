@@ -57,23 +57,36 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing HackRX Policy Analysis API...")
     
     try:
-        # Initialize components
+        # Initialize components with error handling
         app_state.document_processor = DocumentProcessor()
         app_state.embedding_manager = EmbeddingManager(use_pinecone=True)
         app_state.query_parser = QueryParser()
         app_state.clause_matcher = ClauseMatcher()
         app_state.decision_engine = DecisionEngine()
-        app_state.database_manager = DatabaseManager()
         
-        # Initialize LLM Manager (may take time)
-        logger.info("Loading LLM model... This may take a few minutes.")
-        app_state.llm_manager = LLMManager()
+        # Try to initialize database manager
+        try:
+            app_state.database_manager = DatabaseManager()
+            logger.info("Database manager initialized successfully")
+        except Exception as e:
+            logger.warning(f"Database manager failed to initialize: {e}")
+            app_state.database_manager = None
         
+        # Try to initialize LLM Manager
+        try:
+            logger.info("Loading LLM model... This may take a few minutes.")
+            app_state.llm_manager = LLMManager()
+            logger.info("LLM manager initialized successfully")
+        except Exception as e:
+            logger.warning(f"LLM manager failed to initialize: {e}")
+            app_state.llm_manager = None
+        
+        # Mark as initialized even if some components failed
         app_state.initialized = True
-        logger.info("All components initialized successfully!")
+        logger.info("Core components initialized successfully!")
         
     except Exception as e:
-        logger.error(f"Failed to initialize components: {e}")
+        logger.error(f"Failed to initialize core components: {e}")
         app_state.initialized = False
     
     yield
@@ -218,6 +231,8 @@ async def health_check():
         if app_state.database_manager:
             with app_state.database_manager.get_db_connection() as conn:
                 components_status["database_connection"] = "ok"
+        else:
+            components_status["database_connection"] = "disabled"
     except Exception:
         components_status["database_connection"] = "error"
     
@@ -227,10 +242,15 @@ async def health_check():
             # Try to get index stats
             index_stats = app_state.embedding_manager.index.describe_index_stats()
             components_status["pinecone_connection"] = "ok"
+        else:
+            components_status["pinecone_connection"] = "disabled"
     except Exception:
         components_status["pinecone_connection"] = "error"
     
-    overall_status = "healthy" if all(status == "ok" for status in components_status.values()) else "degraded"
+    # Consider system healthy if core components work, even if optional ones fail
+    critical_components = ["document_processor", "embedding_manager", "query_parser", "clause_matcher", "decision_engine"]
+    critical_status = all(components_status.get(comp, "error") == "ok" for comp in critical_components)
+    overall_status = "healthy" if critical_status else "degraded"
     
     return HealthResponse(
         status=overall_status,
@@ -293,20 +313,27 @@ async def process_query(request: QueryRequest, token: str = Depends(verify_token
         
         # Step 3: Store Document and Generate Embeddings
         logger.info("Step 3: Storing document and generating embeddings...")
-        try:
-            document_id = app_state.database_manager.store_document_metadata(
-                url=request.documents,
-                name=utils.extract_filename_from_url(request.documents),
-                file_type="pdf",
-                content=document_text[:1000]  # Store first 1000 chars as sample
-            )
-            
-            # Store chunks in database
-            app_state.database_manager.store_document_chunks(document_id, chunks)
-            
-        except Exception as e:
-            logger.warning(f"Database storage failed: {e}. Continuing with processing...")
-            document_id = f"temp_{int(time.time())}"
+        document_id = f"temp_{int(time.time())}"
+        
+        # Try to store in database if available
+        if app_state.database_manager:
+            try:
+                document_id = app_state.database_manager.store_document_metadata(
+                    url=request.documents,
+                    name=utils.extract_filename_from_url(request.documents),
+                    file_type="pdf",
+                    content=document_text[:1000]  # Store first 1000 chars as sample
+                )
+                
+                # Store chunks in database
+                app_state.database_manager.store_document_chunks(document_id, chunks)
+                logger.info(f"Stored document in database with ID: {document_id}")
+                
+            except Exception as e:
+                logger.warning(f"Database storage failed: {e}. Continuing with processing...")
+                document_id = f"temp_{int(time.time())}"
+        else:
+            logger.info("Database not available, using temporary document ID")
         
         # Generate and store embeddings in vector database
         namespace = f"doc_{document_id}"
@@ -381,14 +408,15 @@ async def process_query(request: QueryRequest, token: str = Depends(verify_token
                 
                 # Log query for analytics
                 try:
-                    query_id = app_state.database_manager.log_query(
-                        query_text=question,
-                        parsed_query=parsed_query,
-                        document_id=document_id if isinstance(document_id, int) else None,
-                        response_text=answer,
-                        processing_time=question_time,
-                        confidence_score=confidence
-                    )
+                    if app_state.database_manager:
+                        query_id = app_state.database_manager.log_query(
+                            query_text=question,
+                            parsed_query=parsed_query,
+                            document_id=document_id if isinstance(document_id, int) else None,
+                            response_text=answer,
+                            processing_time=question_time,
+                            confidence_score=confidence
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to log query: {e}")
                 
@@ -405,14 +433,15 @@ async def process_query(request: QueryRequest, token: str = Depends(verify_token
         
         # Store performance metrics
         try:
-            app_state.database_manager.store_performance_metric(
-                "total_processing_time", total_time,
-                document_id if isinstance(document_id, int) else None
-            )
-            app_state.database_manager.store_performance_metric(
-                "avg_confidence", 
-                sum(metadata["confidence_scores"]) / len(metadata["confidence_scores"]) if metadata["confidence_scores"] else 0
-            )
+            if app_state.database_manager:
+                app_state.database_manager.store_performance_metric(
+                    "total_processing_time", total_time,
+                    document_id if isinstance(document_id, int) else None
+                )
+                app_state.database_manager.store_performance_metric(
+                    "avg_confidence", 
+                    sum(metadata["confidence_scores"]) / len(metadata["confidence_scores"]) if metadata["confidence_scores"] else 0
+                )
         except Exception as e:
             logger.warning(f"Failed to store performance metrics: {e}")
         

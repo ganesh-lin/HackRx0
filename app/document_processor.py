@@ -4,13 +4,19 @@ import os
 import logging
 import re
 import tempfile
+import time
+import uuid
 from urllib.parse import urlparse
 from typing import List, Dict, Any
 from docx import Document
 import email
 from email.mime.text import MIMEText
 from bs4 import BeautifulSoup
-import tiktoken
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,7 +27,10 @@ class DocumentProcessor:
     def __init__(self):
         self.max_chunk_size = int(os.getenv("MAX_CHUNK_SIZE", 512))
         self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", 50))
-        self.encoding = tiktoken.get_encoding("cl100k_base")
+        if TIKTOKEN_AVAILABLE:
+            self.encoding = tiktoken.get_encoding("cl100k_base")
+        else:
+            self.encoding = None
     
     def download_document(self, url: str) -> str:
         """Download document from URL and save locally."""
@@ -42,8 +51,12 @@ class DocumentProcessor:
                 else:
                     file_extension = '.txt'
             
-            # Create temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            # Create temporary file with unique name
+            unique_id = str(uuid.uuid4())[:8]
+            timestamp = str(int(time.time()))
+            temp_filename = f"hackrx_doc_{timestamp}_{unique_id}{file_extension}"
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension, prefix=temp_filename) as temp_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     temp_file.write(chunk)
                 temp_path = temp_file.name
@@ -57,10 +70,10 @@ class DocumentProcessor:
 
     def extract_text_from_pdf(self, pdf_path: str) -> str:
         """Extract text from PDF with improved error handling."""
+        text = ""
         try:
             with open(pdf_path, "rb") as file:
                 reader = PyPDF2.PdfReader(file)
-                text = ""
                 
                 for page_num, page in enumerate(reader.pages):
                     try:
@@ -72,22 +85,26 @@ class DocumentProcessor:
                         logging.warning(f"Failed to extract text from page {page_num + 1}: {e}")
                         continue
                 
-                # Clean up temporary file
-                if os.path.exists(pdf_path):
-                    os.remove(pdf_path)
-                
                 logging.info(f"Extracted text from PDF: {len(text)} characters")
-                return self.clean_text(text)
                 
         except Exception as e:
             logging.error(f"Failed to extract text from PDF: {str(e)}")
             raise
+        finally:
+            # Ensure file is closed and removed
+            try:
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+            except Exception as e:
+                logging.warning(f"Failed to remove temporary file {pdf_path}: {e}")
+        
+        return self.clean_text(text)
 
     def extract_text_from_docx(self, docx_path: str) -> str:
         """Extract text from DOCX file."""
+        text = ""
         try:
             doc = Document(docx_path)
-            text = ""
             
             for paragraph in doc.paragraphs:
                 text += paragraph.text + "\n"
@@ -98,17 +115,21 @@ class DocumentProcessor:
                     for cell in row.cells:
                         text += cell.text + "\t"
                     text += "\n"
-            
-            # Clean up temporary file
-            if os.path.exists(docx_path):
-                os.remove(docx_path)
                 
             logging.info(f"Extracted text from DOCX: {len(text)} characters")
-            return self.clean_text(text)
-            
+                
         except Exception as e:
             logging.error(f"Failed to extract text from DOCX: {str(e)}")
             raise
+        finally:
+            # Ensure file is closed and removed
+            try:
+                if os.path.exists(docx_path):
+                    os.remove(docx_path)
+            except Exception as e:
+                logging.warning(f"Failed to remove temporary file {docx_path}: {e}")
+        
+        return self.clean_text(text)
 
     def extract_text_from_email(self, email_path: str) -> str:
         """Extract text from email file."""
