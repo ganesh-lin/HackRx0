@@ -311,7 +311,7 @@ ANSWER:"""
                     r'waiting\s+period[^.]*?(\d+\s*(?:months?|years?))',
                     r'(\d+\s*(?:months?|years?))[^.]*?waiting'
                 ]
-V
+
                 waiting_results = []
                 for pattern in waiting_patterns:
                     matches = re.findall(pattern, context, re.IGNORECASE)
