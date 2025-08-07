@@ -31,4 +31,3 @@ protobuf
 transformers
 scikit-learn
 tenacity
-document_processor
