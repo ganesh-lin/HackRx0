@@ -16,8 +16,7 @@ logging.basicConfig(filename="app.log", level=logging.INFO,
 class LLMManager:
     def __init__(self):
         # Gemini API configuration
-        self.gemini_api_key = os.getenv(
-            "GEMINI_API_KEY", "AIzaSyBMqJt_poipoX9Lf69gB9O-E0lk_QdZCXU")
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.max_tokens = int(os.getenv("MAX_TOKENS", 1024))
         self.temperature = float(os.getenv("TEMPERATURE", 0.1))
 
