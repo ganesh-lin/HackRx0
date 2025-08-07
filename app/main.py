@@ -134,20 +134,14 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     answers: List[str] = Field(..., description="List of answers corresponding to the questions")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the processing")
     
     class Config:
         schema_extra = {
             "example": {
                 "answers": [
-                    "The grace period for premium payment is 30 days.",
-                    "Yes, maternity expenses are covered after 24 months of continuous coverage."
-                ],
-                "metadata": {
-                    "processing_time": 15.2,
-                    "document_chunks": 45,
-                    "confidence_scores": [0.95, 0.89]
-                }
+                    "A grace period of thirty days is provided for premium payment after the due date to renew or continue the policy without losing continuity benefits.",
+                    "There is a waiting period of thirty-six (36) months of continuous coverage from the first policy inception for pre-existing diseases and their direct complications to be covered."
+                ]
             }
         }
 
@@ -504,7 +498,8 @@ async def process_query(request: QueryRequest, token: str = Depends(verify_token
         except Exception as e:
             logger.warning(f"Failed to store performance metrics: {e}")
         
-        return QueryResponse(answers=answers, metadata=metadata)
+        # Return only the answers array as specified
+        return QueryResponse(answers=answers)
         
     except HTTPException:
         raise
