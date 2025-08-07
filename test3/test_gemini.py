@@ -11,22 +11,27 @@ headers = {
 # Test different types of questions
 test_cases = [
     {
-        "name": "Coverage Question - Should be found",
-        "question": "What is the sum insured under this policy?"
+        "name": "Easy – Grace Period",
+        "question": "What is the grace period after the premium due date?"
     },
     {
-        "name": "Specific Coverage - May not be found",
-        "question": "Does this policy cover knee surgery?"
+        "name": "Easy – Max In-Patient Sum Insured (Imperial Plan)",
+        "question": "What is the maximum in‑patient hospitalization sum insured under the Imperial Plan?"
     },
     {
-        "name": "General Information - Should be found",
-        "question": "What is the name of the insurance company?"
+        "name": "Medium – Waiting Periods",
+        "question": "What are the applicable waiting periods for pre‑existing diseases and specific diseases?"
     },
     {
-        "name": "Policy Details - Should be found", 
-        "question": "What are the waiting periods mentioned in this policy?"
+        "name": "Medium – Physiotherapy Coverage",
+        "question": "Is physiotherapy covered, and if so, what is the waiting period for claims under it?"
+    },
+    {
+        "name": "Hard – Living Donor Medical Expenses",
+        "question": "Does the policy cover medical expenses for a living organ donor, and under what conditions or limits?"
     }
 ]
+
 
 document_url = "https://hackrx.blob.core.windows.net/assets/hackrx_6/policies/BAJHLIP23020V012223.pdf?sv=2023-01-03&st=2025-07-30T06%3A46%3A49Z&se=2025-09-01T06%3A46%3A00Z&sr=c&sp=rl&sig=9szykRKdGYj0BVm1skP%2BX8N9%2FRENEn2k7MQPUp33jyQ%3D"
 

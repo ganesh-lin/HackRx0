@@ -215,8 +215,12 @@ class DocumentProcessor:
     def chunk_text(self, text: str) -> List[Dict[str, Any]]:
         """Split text into meaningful chunks with overlap."""
         try:
-            # Split text into sentences
-            sentences = re.split(r'(?<=[.!?])\s+', text)
+            # Clean text and normalize whitespace
+            text = re.sub(r'\s+', ' ', text)
+            
+            # Split text into sentences with better handling
+            # Use more comprehensive sentence splitting
+            sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
             
             chunks = []
             current_chunk = ""
@@ -224,7 +228,16 @@ class DocumentProcessor:
             chunk_id = 0
             
             for sentence in sentences:
-                sentence_tokens = len(self.encoding.encode(sentence))
+                if not sentence.strip():
+                    continue
+                    
+                sentence = sentence.strip()
+                
+                # Calculate tokens - fallback to word count if tiktoken not available
+                if self.encoding:
+                    sentence_tokens = len(self.encoding.encode(sentence))
+                else:
+                    sentence_tokens = len(sentence.split()) * 1.3  # Rough approximation
                 
                 # If adding this sentence would exceed max chunk size
                 if current_tokens + sentence_tokens > self.max_chunk_size and current_chunk:
@@ -240,22 +253,28 @@ class DocumentProcessor:
                     # Start new chunk with overlap
                     overlap_text = ""
                     overlap_tokens = 0
-                    words = current_chunk.split()
                     
                     # Add overlap from end of previous chunk
-                    for word in reversed(words):
-                        word_tokens = len(self.encoding.encode(word))
-                        if overlap_tokens + word_tokens <= self.chunk_overlap:
-                            overlap_text = word + " " + overlap_text
-                            overlap_tokens += word_tokens
-                        else:
-                            break
+                    current_sentences = current_chunk.split('.')
+                    for i in range(min(3, len(current_sentences))):  # Take last 3 sentences for overlap
+                        overlap_sentence = current_sentences[-(i+1)].strip()
+                        if overlap_sentence:
+                            if self.encoding:
+                                overlap_sentence_tokens = len(self.encoding.encode(overlap_sentence))
+                            else:
+                                overlap_sentence_tokens = len(overlap_sentence.split()) * 1.3
+                            
+                            if overlap_tokens + overlap_sentence_tokens <= self.chunk_overlap:
+                                overlap_text = overlap_sentence + ". " + overlap_text
+                                overlap_tokens += overlap_sentence_tokens
+                            else:
+                                break
                     
-                    current_chunk = overlap_text + sentence + " "
+                    current_chunk = overlap_text + sentence + ". "
                     current_tokens = overlap_tokens + sentence_tokens
                     chunk_id += 1
                 else:
-                    current_chunk += sentence + " "
+                    current_chunk += sentence + ". "
                     current_tokens += sentence_tokens
             
             # Add the last chunk if it has content
@@ -268,8 +287,32 @@ class DocumentProcessor:
                     "end_sentence": chunk_id * 10 + len(current_chunk.split('.'))
                 })
             
-            logging.info(f"Created {len(chunks)} chunks from text")
-            return chunks
+            # Post-process: merge very small chunks
+            final_chunks = []
+            i = 0
+            while i < len(chunks):
+                current = chunks[i]
+                
+                # If chunk is very small, try to merge with next
+                if i < len(chunks) - 1 and current["tokens"] < 100:
+                    next_chunk = chunks[i + 1]
+                    if current["tokens"] + next_chunk["tokens"] <= self.max_chunk_size:
+                        merged_chunk = {
+                            "id": current["id"],
+                            "text": current["text"] + " " + next_chunk["text"],
+                            "tokens": current["tokens"] + next_chunk["tokens"],
+                            "start_sentence": current["start_sentence"],
+                            "end_sentence": next_chunk["end_sentence"]
+                        }
+                        final_chunks.append(merged_chunk)
+                        i += 2  # Skip next chunk as it's merged
+                        continue
+                
+                final_chunks.append(current)
+                i += 1
+            
+            logging.info(f"Created {len(final_chunks)} chunks from text (after merging)")
+            return final_chunks
             
         except Exception as e:
             logging.error(f"Failed to chunk text: {str(e)}")
@@ -277,10 +320,12 @@ class DocumentProcessor:
             chunk_size = 1000
             chunks = []
             for i in range(0, len(text), chunk_size):
+                chunk_text = text[i:i + chunk_size]
+                tokens = len(chunk_text.split()) if not self.encoding else len(self.encoding.encode(chunk_text))
                 chunks.append({
                     "id": i // chunk_size,
-                    "text": text[i:i + chunk_size],
-                    "tokens": len(self.encoding.encode(text[i:i + chunk_size])),
+                    "text": chunk_text,
+                    "tokens": tokens,
                     "start_sentence": i,
                     "end_sentence": i + chunk_size
                 })

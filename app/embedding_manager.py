@@ -20,7 +20,7 @@ class EmbeddingManager:
         self.model = SentenceTransformer(self.embedding_model_name)
         self.embedding_dimension = self.model.get_sentence_embedding_dimension()
         self.use_pinecone = use_pinecone
-        self.top_k = int(os.getenv("TOP_K", 5))
+        self.top_k = int(os.getenv("TOP_K", 8))  # Increased from 5 to 8 for better coverage
         
         # Initialize Pinecone if enabled
         if self.use_pinecone:
