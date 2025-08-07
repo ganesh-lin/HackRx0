@@ -1,17 +1,17 @@
 import os
-from openai import OpenAI
+from huggingface_hub import InferenceClient
 
-client = OpenAI(
-    base_url="https://router.huggingface.co/v1",
+client = InferenceClient(
+    provider="novita",
     api_key="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",
 )
 
 completion = client.chat.completions.create(
-    model="openai/gpt-oss-20b:novita",
+    model="openai/gpt-oss-20b",
     messages=[
         {
             "role": "user",
-            "content": "how many r in the word 'refrigerator'? give me anser not think  please and not too long, just the number",
+            "content": "What is the minimum and maximum entry age allowed under this policy?"
         }
     ],
 )

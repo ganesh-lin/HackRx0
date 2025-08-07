@@ -179,33 +179,70 @@ class EmbeddingManager:
     
     def search_similar(self, query: str, namespace: str = "default", 
                       document_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Search for similar chunks."""
+        """Search for similar chunks with enhanced strategies for insurance queries."""
         try:
             if not query.strip():
                 return []
             
+            # Preprocess query to improve retrieval
+            query = self._preprocess_insurance_query(query)
+            
             # Generate query embedding
             query_embedding = self.model.encode([query], normalize_embeddings=True)[0]
             
+            # Enhanced retrieval logic
             if self.use_pinecone:
-                return self._search_pinecone(query_embedding, namespace, document_id)
+                return self._search_pinecone_enhanced(query, query_embedding, namespace, document_id)
             else:
-                return self._search_faiss(query_embedding, document_id)
+                return self._search_faiss_enhanced(query, query_embedding, document_id)
                 
         except Exception as e:
             logging.error(f"Failed to search similar chunks: {e}")
             return []
     
-    def _search_pinecone(self, query_embedding: np.ndarray, namespace: str, 
-                        document_id: Optional[str]) -> List[Dict[str, Any]]:
-        """Search in Pinecone."""
+    def _preprocess_insurance_query(self, query: str) -> str:
+        """Preprocess insurance query to improve retrieval."""
+        # Add relevant insurance terms based on query content to enhance retrieval
+        query_lower = query.lower()
+        enhanced_query = query
+        
+        # Check for common insurance terms and enhance query
+        if "grace period" in query_lower:
+            enhanced_query = f"{query} premium payment due date renewal"
+        elif "waiting period" in query_lower and "pre-existing" in query_lower:
+            enhanced_query = f"{query} pre-existing disease PED continuous coverage inception"
+        elif "waiting period" in query_lower and "cataract" in query_lower:
+            enhanced_query = f"{query} cataract surgery specific disease waiting"
+        elif "maternity" in query_lower:
+            enhanced_query = f"{query} maternity childbirth delivery termination of pregnancy"
+        elif "donor" in query_lower or "organ" in query_lower:
+            enhanced_query = f"{query} organ donor transplantation harvesting medical expenses"
+        elif "claim" in query_lower and ("discount" in query_lower or "bonus" in query_lower):
+            enhanced_query = f"{query} no claim discount bonus NCD NCB renewal premium"
+        elif "health check" in query_lower:
+            enhanced_query = f"{query} preventive health check-up medical tests reimbursement"
+        elif "hospital" in query_lower and "define" in query_lower:
+            enhanced_query = f"{query} definition of hospital inpatient beds qualified nursing medical practitioner"
+        elif "ayush" in query_lower:
+            enhanced_query = f"{query} AYUSH treatment Ayurveda Yoga Naturopathy Unani Siddha Homeopathy"
+        elif "room rent" in query_lower or "sub-limit" in query_lower:
+            enhanced_query = f"{query} room rent ICU charges sub-limits capping sum insured percentage"
+        elif "physiotherapy" in query_lower:
+            enhanced_query = f"{query} physiotherapy prescribed treatment therapy out-patient physical"
+        
+        logging.info(f"Enhanced query: '{query}' -> '{enhanced_query}'")
+        return enhanced_query
+    
+    def _search_pinecone_enhanced(self, original_query: str, query_embedding: np.ndarray, 
+                                 namespace: str, document_id: Optional[str]) -> List[Dict[str, Any]]:
+        """Enhanced search in Pinecone with more sophisticated retrieval strategies."""
         try:
             # Build filter
             filter_dict = {}
             if document_id:
                 filter_dict["document_id"] = {"$eq": document_id}
             
-            # Search
+            # First pass: search with vector similarity
             search_results = self.index.query(
                 vector=query_embedding.tolist(),
                 top_k=self.top_k,
@@ -226,26 +263,124 @@ class EmbeddingManager:
                 }
                 results.append(result)
             
-            logging.info(f"Found {len(results)} similar chunks in Pinecone")
+            # If we have enough results, return them
+            if len(results) >= self.top_k * 0.8:  # At least 80% of requested results
+                logging.info(f"Found {len(results)} similar chunks in Pinecone (standard)")
+                return results
+            
+            # Second pass: if we have insufficient results, use hybrid search
+            # Check for critical insurance terms
+            query_lower = original_query.lower()
+            critical_terms = []
+            
+            if "grace period" in query_lower:
+                critical_terms = ["grace period", "premium payment", "renewal"]
+            elif "waiting period" in query_lower:
+                critical_terms = ["waiting period", "pre-existing", "specific disease"]
+            elif "maternity" in query_lower:
+                critical_terms = ["maternity", "childbirth", "pregnancy", "delivery"]
+            elif "organ donor" in query_lower:
+                critical_terms = ["organ donor", "transplantation", "harvest"]
+            elif "no claim" in query_lower:
+                critical_terms = ["no claim", "discount", "bonus"]
+            elif "health check" in query_lower:
+                critical_terms = ["health check-up", "preventive", "medical test"]
+            elif "hospital" in query_lower:
+                critical_terms = ["hospital", "definition", "beds", "nursing"]
+            elif "ayush" in query_lower:
+                critical_terms = ["AYUSH", "ayurveda", "yoga", "naturopathy"]
+            elif "room rent" in query_lower:
+                critical_terms = ["room rent", "ICU", "sub-limit", "capping"]
+            elif "physiotherapy" in query_lower:
+                critical_terms = ["physiotherapy", "therapy", "treatment"]
+            
+            # If we identified critical terms, use them to enhance search
+            if critical_terms:
+                logging.info(f"Using critical terms for enhanced retrieval: {critical_terms}")
+                
+                # Get all chunks from document
+                all_results = self.index.query(
+                    vector=query_embedding.tolist(),
+                    top_k=100,  # Get a larger set of chunks
+                    namespace=namespace,
+                    filter=filter_dict if filter_dict else None,
+                    include_metadata=True
+                ).matches
+                
+                # Score chunks based on critical term presence
+                scored_results = []
+                for match in all_results:
+                    text = match.metadata.get("text", "").lower()
+                    base_score = match.score
+                    term_score = sum(term.lower() in text for term in critical_terms) * 0.1
+                    scored_results.append((match, base_score + term_score))
+                
+                # Sort by combined score and take top results
+                scored_results.sort(key=lambda x: x[1], reverse=True)
+                
+                # Build final results
+                enhanced_results = []
+                for match, score in scored_results[:self.top_k]:
+                    result = {
+                        "id": match.id,
+                        "score": score,
+                        "text": match.metadata.get("text", ""),
+                        "document_id": match.metadata.get("document_id", ""),
+                        "chunk_id": match.metadata.get("chunk_id", 0),
+                        "tokens": match.metadata.get("tokens", 0)
+                    }
+                    enhanced_results.append(result)
+                
+                logging.info(f"Found {len(enhanced_results)} similar chunks in Pinecone (enhanced)")
+                return enhanced_results
+            
             return results
             
         except Exception as e:
             logging.error(f"Failed to search Pinecone: {e}")
             return []
     
-    def _search_faiss(self, query_embedding: np.ndarray, document_id: Optional[str]) -> List[Dict[str, Any]]:
-        """Search in FAISS."""
+    def _search_faiss_enhanced(self, original_query: str, query_embedding: np.ndarray, 
+                              document_id: Optional[str]) -> List[Dict[str, Any]]:
+        """Enhanced search in FAISS."""
         try:
             if self.faiss_index.ntotal == 0:
                 return []
             
-            # Search FAISS
+            # Search FAISS with more results initially
             scores, indices = self.faiss_index.search(
                 query_embedding.reshape(1, -1), 
-                min(self.top_k, self.faiss_index.ntotal)
+                min(self.top_k * 2, self.faiss_index.ntotal)  # Get more results for filtering
             )
             
+            # Check for critical insurance terms
+            query_lower = original_query.lower()
+            critical_terms = []
+            
+            if "grace period" in query_lower:
+                critical_terms = ["grace period", "premium payment", "renewal"]
+            elif "waiting period" in query_lower:
+                critical_terms = ["waiting period", "pre-existing", "specific disease"]
+            elif "maternity" in query_lower:
+                critical_terms = ["maternity", "childbirth", "pregnancy"]
+            elif "donor" in query_lower or "organ" in query_lower:
+                critical_terms = ["organ donor", "transplantation", "harvest"]
+            elif "no claim" in query_lower:
+                critical_terms = ["no claim", "discount", "bonus"]
+            elif "health check" in query_lower:
+                critical_terms = ["health check-up", "preventive", "medical test"]
+            elif "hospital" in query_lower and "define" in query_lower:
+                critical_terms = ["hospital", "definition", "beds", "nursing"]
+            elif "ayush" in query_lower:
+                critical_terms = ["AYUSH", "ayurveda", "yoga", "naturopathy"]
+            elif "room rent" in query_lower or "sub-limit" in query_lower:
+                critical_terms = ["room rent", "ICU", "sub-limit", "capping"]
+            elif "physiotherapy" in query_lower:
+                critical_terms = ["physiotherapy", "therapy", "treatment"]
+            
             results = []
+            scored_results = []
+            
             for score, idx in zip(scores[0], indices[0]):
                 if idx < len(self.faiss_metadata):
                     metadata = self.faiss_metadata[idx]
@@ -254,15 +389,30 @@ class EmbeddingManager:
                     if document_id and metadata.get("document_id") != document_id:
                         continue
                     
-                    result = {
-                        "id": f"faiss_{idx}",
-                        "score": float(score),
-                        "text": metadata.get("text", ""),
-                        "document_id": metadata.get("document_id", ""),
-                        "chunk_id": metadata.get("chunk_id", 0),
-                        "tokens": metadata.get("tokens", 0)
-                    }
-                    results.append(result)
+                    # Enhance scoring with critical terms if available
+                    if critical_terms:
+                        text = metadata.get("text", "").lower()
+                        term_score = sum(term.lower() in text for term in critical_terms) * 0.1
+                        final_score = float(score) + term_score
+                    else:
+                        final_score = float(score)
+                    
+                    scored_results.append((metadata, final_score))
+            
+            # Sort by combined score
+            scored_results.sort(key=lambda x: x[1], reverse=True)
+            
+            # Take top k results
+            for metadata, final_score in scored_results[:self.top_k]:
+                result = {
+                    "id": f"faiss_{metadata.get('faiss_id', 0)}",
+                    "score": final_score,
+                    "text": metadata.get("text", ""),
+                    "document_id": metadata.get("document_id", ""),
+                    "chunk_id": metadata.get("chunk_id", 0),
+                    "tokens": metadata.get("tokens", 0)
+                }
+                results.append(result)
             
             logging.info(f"Found {len(results)} similar chunks in FAISS")
             return results

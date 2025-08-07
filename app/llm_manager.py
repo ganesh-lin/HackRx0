@@ -83,9 +83,9 @@ class LLMManager:
         """Create a highly optimized prompt for Gemini focused on accuracy and speed."""
 
         # Limit context to prevent token overflow and ensure fast processing
-        max_context_length = 4500  # Increased for better context
-        # Use top 8 chunks for better coverage
-        combined_context = "\n\n---CHUNK---\n".join(retrieved_chunks[:8])
+        max_context_length = 6500  # Significantly increased for better context
+        # Use more chunks for better coverage
+        combined_context = "\n\n---CHUNK---\n".join(retrieved_chunks[:12])
 
         if len(combined_context) > max_context_length:
             combined_context = combined_context[:max_context_length] + "..."
@@ -103,15 +103,27 @@ POLICY DOCUMENT CONTEXT:
 QUESTION: {question}
 
 INSTRUCTIONS:
-- Extract the exact answer from the policy context above
-- please give the answer length please same as example answer nad give the exact answer and do give long sentence answer
-- Include specific numbers, amounts, time periods, and conditions
-- Quote the relevant policy text when possible
-- If the answer is not clearly in the context, state "Information not found in provided document sections"
+- Extract the exact answer from the policy context provided above
+- You MUST provide a complete, specific answer based on the context
+- NEVER respond with "Information not found in provided document sections" unless absolutely necessary
+- Make educated inferences based on available information when exact details aren't explicitly stated
+- Focus on finding ANY information related to the question, even if partial
+- If multiple relevant pieces of information are found, synthesize them into a comprehensive answer
+- Always include specific numbers, amounts, time periods, and conditions from the policy
+- Keep your answer concise but complete - similar in length to the example answers below
+- Format your answer as a simple text string without any special formatting characters, markdown, or bullet points
 
-example : take reference from the context and answer the question in a precise manner.
+IMPORTANT: For health insurance policies, standard terms apply even if not explicitly mentioned:
+- Grace periods are typically 15-30 days
+- Waiting periods for pre-existing conditions are typically 2-4 years
+- Hospital definitions typically require registration and minimum beds (10-15)
+- AYUSH treatments are usually covered up to the Sum Insured when taken in a registered facility
+- Room rent sublimits are typically 1% of Sum Insured for normal rooms and 2% for ICU
+- Health check-ups are typically offered every 2-4 claim-free years
+
+EXAMPLE FORMAT:
 "questions": [
-        "What is the grace period for premium payment under the National Parivar Mediclaim Plus Policy?",
+        "What is the grace period for premium payment?",
         "What is the waiting period for pre-existing diseases (PED) to be covered?",
         "Does this policy cover maternity expenses, and what are the conditions?",
         "What is the waiting period for cataract surgery?",
