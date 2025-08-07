@@ -1,0 +1,13 @@
+{
+  "Health Check": false,
+  "Root Endpoint": false,
+  "Authentication": false,
+  "Query Processing": {
+    "success": false,
+    "error": "Cannot connect to host localhost:8000 ssl:default [The remote computer refused the network connection]",
+    "processing_time": 4.0746848583221436
+  },
+  "Invalid Document URL": false,
+  "Empty Questions": false,
+  "Analytics Endpoint": false
+}
