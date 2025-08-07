@@ -4,7 +4,7 @@ pypdf2
 transformers
 sentence-transformers
 faiss-cpu
-pinecone-client
+pinecone
 langchain
 psycopg2-binary
 python-dotenv
