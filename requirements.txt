@@ -21,3 +21,4 @@ regex
 tiktoken
 pydantic[email]
 google-generativeai
+document_processor
