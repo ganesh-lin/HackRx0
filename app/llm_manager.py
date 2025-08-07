@@ -121,10 +121,16 @@ Provide a comprehensive answer based solely on the context provided. If specific
     def generate_response(self, prompt: str) -> str:
         """Generate response using the LLM or fallback method."""
         try:
+            print(f"\n=== GENERATE_RESPONSE START ===")
+            print(f"Model type: {self.model_type}")
+            print(f"Pipeline available: {self.pipeline is not None}")
+            
             if self.model_type == "fallback" or not self.pipeline:
                 # Use simple rule-based processing
+                print("🔄 Using simple text processing (fallback mode)")
                 return self._simple_text_processing(prompt)
             
+            print("🤖 Attempting to use HuggingFace model...")
             # Generate response using the model
             response = self.pipeline(
                 prompt,
@@ -145,17 +151,28 @@ Provide a comprehensive answer based solely on the context provided. If specific
             # Clean up the response
             generated_text = self._clean_response(generated_text)
             
-            logging.info(f"Generated response: {len(generated_text)} characters")
+            print(f"✅ HuggingFace model generated response: {len(generated_text)} characters")
+            
+            # Check if response is empty and fallback if needed
+            if not generated_text or generated_text.lower() in ['none', 'null', '']:
+                print(f"❌ HuggingFace model returned empty response, falling back...")
+                return self._simple_text_processing(prompt)
+            
             return generated_text
             
         except Exception as e:
-            logging.error(f"Failed to generate response: {e}")
+            print(f"❌ ERROR: HuggingFace model failed: {e}")
+            print(f"🔄 Falling back to simple text processing...")
             # Fallback to simple processing
             return self._simple_text_processing(prompt)
     
     def _simple_text_processing(self, prompt: str) -> str:
         """Simple rule-based text processing as fallback."""
         try:
+            print(f"\n=== SIMPLE TEXT PROCESSING START ===")
+            print(f"Prompt length: {len(prompt)} characters")
+            print(f"Prompt preview (first 500 chars): {prompt[:500]}")
+            
             # Extract question and context from prompt
             if "QUESTION:" in prompt:
                 question_part = prompt.split("QUESTION:")[-1].strip()
@@ -170,13 +187,14 @@ Provide a comprehensive answer based solely on the context provided. If specific
                 else:
                     context = context_part.strip()
             else:
-                logging.warning("No CONTEXT found in prompt")
+                print(f"❌ ERROR: No CONTEXT found in prompt")
+                print(f"Full prompt: {prompt}")
                 return "Not found in document."
             
             # Debug logging
-            logging.info(f"Question: {question[:100]}...")
-            logging.info(f"Context length: {len(context)} characters")
-            logging.info(f"Context preview: {context[:200]}...")
+            print(f"✅ Question extracted: '{question}'")
+            print(f"✅ Context length: {len(context)} characters")
+            print(f"Context preview (first 500 chars): {context[:500]}")
             
             # Simple keyword matching for insurance questions
             question_lower = question.lower()
@@ -186,143 +204,74 @@ Provide a comprehensive answer based solely on the context provided. If specific
             sentences = context.split('.')
             sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
             
-            logging.info(f"Found {len(sentences)} sentences in context")
+            print(f"Found {len(sentences)} sentences in context")
             
             # Coverage questions
             if any(word in question_lower for word in ["cover", "coverage", "include", "benefit"]):
-                logging.info("Processing coverage-related question")
+                print("🔍 Processing coverage-related question")
                 relevant_sentences = []
                 for sentence in sentences:
                     sentence_lower = sentence.lower()
                     if any(word in sentence_lower for word in ["cover", "coverage", "include", "benefit", "eligible", "insured", "policy"]):
                         relevant_sentences.append(sentence.strip())
+                        print(f"  📄 Found coverage sentence: {sentence.strip()[:100]}...")
                 
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for coverage")
+                print(f"Found {len(relevant_sentences)} relevant sentences for coverage")
                 if relevant_sentences:
                     result = ". ".join(relevant_sentences[:3]) + "."
-                    logging.info(f"Returning coverage answer: {result[:100]}...")
+                    print(f"✅ Returning coverage answer: {result[:200]}...")
                     return result
             
             # Policy name questions
             if any(word in question_lower for word in ["name", "title", "policy name"]):
-                logging.info("Processing policy name question")
+                print("Processing policy name question")
                 relevant_sentences = []
                 for sentence in sentences:
                     sentence_lower = sentence.lower()
                     if any(word in sentence_lower for word in ["arogya", "sanjeevani", "policy", "national"]):
                         relevant_sentences.append(sentence.strip())
+                        print(f"  Found policy name sentence: {sentence.strip()[:100]}...")
                 
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for policy name")
+                print(f"Found {len(relevant_sentences)} relevant sentences for policy name")
                 if relevant_sentences:
                     result = ". ".join(relevant_sentences[:2]) + "."
-                    logging.info(f"Returning policy name answer: {result[:100]}...")
-                    return result
-            
-            # Waiting period questions
-            if any(word in question_lower for word in ["waiting", "grace", "period", "time"]):
-                logging.info("Processing waiting period question")
-                relevant_sentences = []
-                for sentence in sentences:
-                    sentence_lower = sentence.lower()
-                    if any(word in sentence_lower for word in ["waiting", "grace", "period", "days", "months", "years", "time"]):
-                        relevant_sentences.append(sentence.strip())
-                
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for waiting period")
-                if relevant_sentences:
-                    result = ". ".join(relevant_sentences[:3]) + "."
-                    logging.info(f"Returning waiting period answer: {result[:100]}...")
-                    return result
-            
-            # Premium questions
-            if any(word in question_lower for word in ["premium", "payment", "cost", "amount"]):
-                logging.info("Processing premium question")
-                relevant_sentences = []
-                for sentence in sentences:
-                    sentence_lower = sentence.lower()
-                    if any(word in sentence_lower for word in ["premium", "payment", "cost", "amount", "rupees", "rs", "pay"]):
-                        relevant_sentences.append(sentence.strip())
-                
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for premium")
-                if relevant_sentences:
-                    result = ". ".join(relevant_sentences[:3]) + "."
-                    logging.info(f"Returning premium answer: {result[:100]}...")
-                    return result
-            
-            # Surgery/medical procedure questions
-            if any(word in question_lower for word in ["surgery", "operation", "procedure", "treatment", "medical"]):
-                logging.info("Processing surgery/medical question")
-                relevant_sentences = []
-                for sentence in sentences:
-                    sentence_lower = sentence.lower()
-                    if any(word in sentence_lower for word in ["surgery", "operation", "procedure", "treatment", "medical", "hospital", "doctor"]):
-                        relevant_sentences.append(sentence.strip())
-                
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for surgery")
-                if relevant_sentences:
-                    result = ". ".join(relevant_sentences[:3]) + "."
-                    logging.info(f"Returning surgery answer: {result[:100]}...")
-                    return result
-            
-            # Maternity questions
-            if any(word in question_lower for word in ["maternity", "pregnancy", "childbirth", "delivery"]):
-                logging.info("Processing maternity question")
-                relevant_sentences = []
-                for sentence in sentences:
-                    sentence_lower = sentence.lower()
-                    if any(word in sentence_lower for word in ["maternity", "pregnancy", "childbirth", "delivery", "baby", "mother"]):
-                        relevant_sentences.append(sentence.strip())
-                
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for maternity")
-                if relevant_sentences:
-                    result = ". ".join(relevant_sentences[:3]) + "."
-                    logging.info(f"Returning maternity answer: {result[:100]}...")
-                    return result
-            
-            # Disease/condition questions
-            if any(word in question_lower for word in ["disease", "condition", "illness", "sickness"]):
-                logging.info("Processing disease/condition question")
-                relevant_sentences = []
-                for sentence in sentences:
-                    sentence_lower = sentence.lower()
-                    if any(word in sentence_lower for word in ["disease", "condition", "illness", "sickness", "health", "medical"]):
-                        relevant_sentences.append(sentence.strip())
-                
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for disease")
-                if relevant_sentences:
-                    result = ". ".join(relevant_sentences[:3]) + "."
-                    logging.info(f"Returning disease answer: {result[:100]}...")
+                    print(f"✅ Returning policy name answer: {result[:200]}...")
                     return result
             
             # General search - extract keywords from question and search in context
             question_words = [word for word in question_lower.split() if len(word) > 3 and word not in ["what", "when", "where", "does", "this", "policy", "and", "are", "the"]]
-            logging.info(f"Question keywords: {question_words}")
+            print(f"Question keywords: {question_words}")
             
             if question_words:
                 relevant_sentences = []
                 for sentence in sentences:
                     sentence_lower = sentence.lower()
                     # Check if sentence contains any of the question keywords
-                    if any(keyword in sentence_lower for keyword in question_words):
+                    matches = [kw for kw in question_words if kw in sentence_lower]
+                    if matches:
                         relevant_sentences.append(sentence.strip())
+                        print(f"  Found general sentence with keywords {matches}: {sentence.strip()[:100]}...")
                 
-                logging.info(f"Found {len(relevant_sentences)} relevant sentences for general keywords")
+                print(f"Found {len(relevant_sentences)} relevant sentences for general keywords")
                 if relevant_sentences:
                     result = ". ".join(relevant_sentences[:3]) + "."
-                    logging.info(f"Returning general answer: {result[:100]}...")
+                    print(f"✅ Returning general answer: {result[:200]}...")
                     return result
             
             # If no specific matching, return first few sentences of context
             if sentences and len(sentences) > 0:
-                logging.info("No specific matches, returning first sentences")
+                print("⚠️ No specific matches, returning first sentences")
                 result = ". ".join(sentences[:2]) + "."
-                logging.info(f"Returning fallback answer: {result[:100]}...")
+                print(f"🔄 Returning fallback answer: {result[:200]}...")
                 return result
             
-            logging.warning("No sentences found in context")
+            print(f"❌ ERROR: No sentences found in context")
+            print(f"Context was: '{context}'")
             return "Information not found in the provided document context."
-            
         except Exception as e:
-            logging.error(f"Simple text processing failed: {e}")
+            print(f"❌ ERROR: Simple text processing failed: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return "Error processing question."
     
     def _clean_response(self, text: str) -> str:
@@ -344,23 +293,39 @@ Provide a comprehensive answer based solely on the context provided. If specific
                        context_type: str = "insurance") -> str:
         """Main method to answer a question using retrieved context."""
         try:
+            print(f"\n=== LLM ANSWER_QUESTION DEBUG ===")
+            print(f"Question: {question}")
+            print(f"Retrieved chunks count: {len(retrieved_chunks)}")
+            print(f"Context type: {context_type}")
+            
+            for i, chunk in enumerate(retrieved_chunks[:3]):
+                print(f"Chunk {i+1} type: {type(chunk)}")
+                print(f"Chunk {i+1} preview: {str(chunk)[:100]}...")
+            
             if not retrieved_chunks:
+                print("❌ No chunks received!")
                 return "Not found in document."
             
             # Create prompt
             prompt = self.create_prompt(question, retrieved_chunks, context_type)
+            print(f"Prompt created, length: {len(prompt)}")
             
             # Generate response
             response = self.generate_response(prompt)
+            print(f"Response generated (length {len(response)}): '{response}'")
+            print(f"Response type: {type(response)}")
             
             # Validate response
             if not response or response.lower().strip() in ["", "not found in document", "not found in document."]:
+                print(f"❌ Empty or invalid response! Response: '{response}', lower stripped: '{response.lower().strip() if response else 'None'}'")
                 return "Not found in document."
             
             return response
             
         except Exception as e:
-            logging.error(f"Failed to answer question: {e}")
+            print(f"❌ ERROR in answer_question: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return f"Error processing question: {str(e)}"
     
     def batch_answer_questions(self, questions: List[str], 

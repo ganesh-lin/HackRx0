@@ -1,13 +1,72 @@
 {
-  "Health Check": false,
-  "Root Endpoint": false,
-  "Authentication": false,
+  "Health Check": true,
+  "Root Endpoint": true,
+  "Authentication": true,
   "Query Processing": {
-    "success": false,
-    "error": "Cannot connect to host localhost:8000 ssl:default [The remote computer refused the network connection]",
-    "processing_time": 4.0746848583221436
+    "success": true,
+    "status_code": 200,
+    "processing_time": 66.9770073890686,
+    "answers_count": 5,
+    "has_metadata": true,
+    "response_data": {
+      "answers": [
+        "Not found in document.",
+        "Not found in document.",
+        "Not found in document.",
+        "Not found in document.",
+        "Not found in document."
+      ],
+      "metadata": {
+        "processing_time": 66.9670033454895,
+        "document_chunks": 59,
+        "confidence_scores": [
+          0.6000000000000001,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "question_details": [
+          {
+            "question_index": 0,
+            "processing_time": 9.732410669326782,
+            "relevant_chunks_count": 3,
+            "confidence": 0.6000000000000001,
+            "query_type": "premium"
+          },
+          {
+            "question_index": 1,
+            "processing_time": 10.898836374282837,
+            "relevant_chunks_count": 5,
+            "confidence": 1.0,
+            "query_type": "coverage"
+          },
+          {
+            "question_index": 2,
+            "processing_time": 10.58284330368042,
+            "relevant_chunks_count": 5,
+            "confidence": 1.0,
+            "query_type": "coverage"
+          },
+          {
+            "question_index": 3,
+            "processing_time": 10.86406683921814,
+            "relevant_chunks_count": 5,
+            "confidence": 1.0,
+            "query_type": "waiting_period"
+          },
+          {
+            "question_index": 4,
+            "processing_time": 12.091848850250244,
+            "relevant_chunks_count": 5,
+            "confidence": 1.0,
+            "query_type": "coverage"
+          }
+        ]
+      }
+    }
   },
-  "Invalid Document URL": false,
-  "Empty Questions": false,
+  "Invalid Document URL": true,
+  "Empty Questions": true,
   "Analytics Endpoint": false
 }
